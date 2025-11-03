@@ -1,43 +1,9 @@
 import streamlit as st
 import random
-from datetime import date
+from datetime import date, datetime
+from utilisateur import charger_utilisateur, sauvegarder_utilisateur, obtenir_tous_eleves, profil_par_defaut
 
-# ============================================
-# SESSION : Initialisations robustes
-# ============================================
-def init_session_state():
-    clés = {
-        'niveau': "CE1",
-        'points': 0,
-        'badges': [],
-        'stats_par_niveau': {
-            'CE1': {'correct': 0, 'total': 0},
-            'CE2': {'correct': 0, 'total': 0},
-            'CM1': {'correct': 0, 'total': 0},
-            'CM2': {'correct': 0, 'total': 0}
-        },
-        'streak': {'current': 0, 'max': 0},
-        'scores_history': [],
-        'daily_challenge': {'today_date': str(date.today()), 'completed': False, 'challenge': None, 'progress': 0},
-        'exercice_courant': None,
-        'show_feedback': False,
-        'feedback_correct': False,
-        'feedback_reponse': None,
-        'dernier_exercice': None,
-        'jeu_type': None,
-        'jeu_memory': None,
-        'memory_first_flip': None,
-        'memory_second_flip': None,
-        'memory_incorrect_pair': None,
-        'active_category': "Exercice"
-    }
-    for k, v in clés.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
-
-# ============================================
-# CSS
-# ============================================
+# =============== CSS ===============
 def local_css():
     st.markdown("""
     <style>
@@ -76,10 +42,69 @@ def local_css():
     </style>
     """, unsafe_allow_html=True)
 
+# =============== SESSION INIT ===============
+def init_session_state():
+    cles = {
+        'niveau': "CE1",
+        'points': 0,
+        'badges': [],
+        'stats_par_niveau': {
+            'CE1': {'correct': 0, 'total': 0},
+            'CE2': {'correct': 0, 'total': 0},
+            'CM1': {'correct': 0, 'total': 0},
+            'CM2': {'correct': 0, 'total': 0}
+        },
+        'streak': {'current': 0, 'max': 0},
+        'scores_history': [],
+        'daily_challenge': {'today_date': str(date.today()), 'completed': False, 'challenge': None, 'progress': 0},
+        'exercice_courant': None,
+        'show_feedback': False,
+        'feedback_correct': False,
+        'feedback_reponse': None,
+        'dernier_exercice': None,
+        'jeu_type': None,
+        'jeu_memory': None,
+        'memory_first_flip': None,
+        'memory_second_flip': None,
+        'memory_incorrect_pair': None,
+        'active_category': "Exercice"
+    }
+    for k, v in cles.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-# ============================================
-# GENERATEURS EXERCICES
-# ============================================
+# =============== PROFIL: Auto-save ===============
+def calculer_progression(stats_par_niveau):
+    progression = {}
+    for niveau in ['CE1', 'CE2', 'CM1', 'CM2']:
+        total = stats_par_niveau[niveau]['total']
+        correct = stats_par_niveau[niveau]['correct']
+        pourcentage = (correct / total * 100) if total > 0 else 0
+        progression[niveau] = min(int(pourcentage), 100)
+    return progression
+
+def auto_save_profil(succes):
+    if "utilisateur" not in st.session_state or "profil" not in st.session_state:
+        return
+    nom = st.session_state["utilisateur"]
+    profil = st.session_state["profil"]
+    profil["niveau"] = st.session_state.niveau
+    profil["points"] = st.session_state.points
+    profil["badges"] = st.session_state.badges
+    profil["exercices_reussis"] = profil.get("exercices_reussis", 0)
+    profil["exercices_totaux"] = profil.get("exercices_totaux", 0)
+    if succes:
+        profil["exercices_reussis"] += 1
+    profil["exercices_totaux"] += 1
+    profil["taux_reussite"] = int(100 * profil["exercices_reussis"] / profil["exercices_totaux"]) if profil["exercices_totaux"] > 0 else 0
+    profil["date_derniere_session"] = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    if "stats_par_niveau" in st.session_state:
+        progression = calculer_progression(st.session_state.stats_par_niveau)
+        profil["progression"] = progression
+    sauvegarder_utilisateur(nom, profil)
+    st.session_state["profil"] = profil
+
+# =============== EXERCICES GENERATEURS ===============
 def generer_addition(niveau):
     if niveau == "CE1":
         a, b = random.randint(1, 10), random.randint(1, 10)
@@ -169,19 +194,7 @@ def generer_probleme(niveau):
         reponse = a // b if b > 0 else 0
     return {'question': f"{contexte} {question}", 'reponse': reponse}
 
-
-# ============================================
-# SYSTÈMES & BADGES
-# ============================================
-def calculer_progression(stats_par_niveau):
-    progression = {}
-    for niveau in ['CE1', 'CE2', 'CM1', 'CM2']:
-        total = stats_par_niveau[niveau]['total']
-        correct = stats_par_niveau[niveau]['correct']
-        pourcentage = (correct / total * 100) if total > 0 else 0
-        progression[niveau] = min(int(pourcentage), 100)
-    return progression
-
+# =============== BADGES, STREAK, LEADERBOARD, DÉFI JOUR ===============
 def maj_streak(correct):
     if correct:
         st.session_state.streak['current'] += 1
@@ -241,9 +254,7 @@ def verifier_badges(points, badges_actuels):
             nouveaux_badges.append(badge['nom'])
     return nouveaux_badges
 
-# ============================================
-# EXERCICE RAPIDE
-# ============================================
+# =============== EXERCICE RAPIDE SECTION ===============
 def exercice_rapide_section():
     st.markdown('<div class="categorie-header">📚 Exercice Rapide - Calcul Mental</div>', unsafe_allow_html=True)
     st.write("⚡ Sois rapide et précis !")
@@ -291,6 +302,7 @@ def exercice_rapide_section():
                     st.session_state.scores_history.append({'type': 'Calcul Mental', 'points': 10 + bonus, 'date': str(date.today())})
                     nouveaux = verifier_badges(st.session_state.points, st.session_state.badges)
                     st.session_state.badges.extend(nouveaux)
+                    auto_save_profil(correct)
                     st.rerun()
         if st.session_state.show_feedback and st.session_state.dernier_exercice:
             st.markdown("---")
@@ -316,9 +328,7 @@ def exercice_rapide_section():
                     st.session_state.show_feedback = False
                     st.rerun()
 
-# ============================================
-# SECTION JEUX : CORRECTION LOGIQUE MEMORY
-# ============================================
+# ================= SECTION JEUX ===================
 def jeu_section():
     st.markdown('<div class="categorie-header">🎮 Jeux</div>', unsafe_allow_html=True)
     st.write("Sélectionne un jeu !")
@@ -338,7 +348,7 @@ def jeu_section():
             st.session_state.memory_incorrect_pair = None
             st.rerun()
     st.markdown("---")
-    # DROITE
+    # DROITE NUMÉRIQUE
     if st.session_state.get('jeu_type') == 'droite' and st.session_state.exercice_courant:
         dn = st.session_state.exercice_courant
         st.subheader(f"📍 Place le nombre {dn['nombre']} sur la droite")
@@ -363,6 +373,7 @@ def jeu_section():
                 st.session_state.scores_history.append({'type': 'Droite Numérique', 'points': score + bonus, 'date': str(date.today())})
                 nouveaux = verifier_badges(st.session_state.points, st.session_state.badges)
                 st.session_state.badges.extend(nouveaux)
+                auto_save_profil(score > 0)
                 st.rerun()
         if st.session_state.show_feedback and st.session_state.dernier_exercice:
             st.markdown("---")
@@ -383,7 +394,7 @@ def jeu_section():
                     st.session_state.exercice_courant = generer_droite_numerique(st.session_state.niveau)
                     st.session_state.show_feedback = False
                     st.rerun()
-    # ===== MEMORY SIMPLE =====
+    # MEMORY
     elif st.session_state.get('jeu_type') == 'memory' and st.session_state.jeu_memory:
         st.subheader("🧠 Memory - Trouve les paires !")
         memory = st.session_state.jeu_memory
@@ -391,7 +402,6 @@ def jeu_section():
         pairs_found = len(memory['matched']) // 2
         st.write(f"Paires trouvées : **{pairs_found}/{total_pairs}**")
         st.progress(pairs_found / total_pairs)
-        # Cas spécial : on cache la mauvaise paire du tour d'avant (grâce à memory_incorrect_pair)
         if st.session_state.memory_incorrect_pair:
             memory['revealed'].difference_update(st.session_state.memory_incorrect_pair)
             st.session_state.memory_incorrect_pair = None
@@ -401,10 +411,14 @@ def jeu_section():
             with col:
                 card_value = memory['cards'][idx]
                 if idx in memory['matched']:
-                    st.markdown(f"<div style='aspect-ratio: 1; background: linear-gradient(135deg, #90EE90 0%, #28a745 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 38px;'>{card_value}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='aspect-ratio: 1; background: linear-gradient(135deg, #90EE90 0%, #28a745 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 32px'>{card_value}</div>",
+                        unsafe_allow_html=True)
                     st.button("✓", key=f"mem_{idx}_matched", disabled=True, use_container_width=True)
                 elif idx in memory['revealed']:
-                    st.markdown(f"<div style='aspect-ratio: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 38px;'>{card_value}</div>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"<div style='aspect-ratio: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 32px'>{card_value}</div>",
+                        unsafe_allow_html=True)
                     st.button("✓", key=f"mem_{idx}_revealed", disabled=True, use_container_width=True)
                 else:
                     if st.button("?", key=f"mem_{idx}", use_container_width=True):
@@ -418,7 +432,6 @@ def jeu_section():
                             st.session_state.memory_second_flip = idx
                             memory['revealed'].add(idx)
                             st.rerun()
-        # VÉRIFIER PAIRE (après affichage, jamais avant !)
         if st.session_state.memory_first_flip is not None and st.session_state.memory_second_flip is not None:
             first_idx = st.session_state.memory_first_flip
             second_idx = st.session_state.memory_second_flip
@@ -434,14 +447,15 @@ def jeu_section():
                 st.session_state.memory_incorrect_pair = {first_idx, second_idx}
             st.session_state.memory_first_flip = None
             st.session_state.memory_second_flip = None
+            auto_save_profil(True)  # Memory = progression même si non notée "juste"/"faux"
             st.rerun()
-        # === FIN MEMORY ===
         if len(memory['matched']) == len(memory['cards']):
             st.markdown("---")
             st.markdown(f'<div class="feedback-success">🎉 BRAVO ! Tu as trouvé toutes les paires !</div>', unsafe_allow_html=True)
             st.balloons()
             st.session_state.points += 50
             st.session_state.scores_history.append({'type': 'Memory', 'points': 50, 'date': str(date.today())})
+            auto_save_profil(True)
             if st.button("➡️ Nouvelle partie", use_container_width=True, key="btn_new_memory"):
                 st.session_state.jeu_memory = generer_memory_emoji(st.session_state.niveau)
                 st.session_state.memory_first_flip = None
@@ -449,9 +463,7 @@ def jeu_section():
                 st.session_state.memory_incorrect_pair = None
                 st.rerun()
 
-# ============================================
-# DÉFI
-# ============================================
+# ============== DÉFI SECTION ==============
 def defi_section():
     st.markdown('<div class="categorie-header">🚀 Défi - Problèmes Contextualisés</div>', unsafe_allow_html=True)
     st.write("💡 Résous des problèmes du monde réel.")
@@ -487,6 +499,7 @@ def defi_section():
                     st.session_state.scores_history.append({'type': 'Défi', 'points': (30 if correct else 0) + bonus, 'date': str(date.today())})
                     nouveaux = verifier_badges(st.session_state.points, st.session_state.badges)
                     st.session_state.badges.extend(nouveaux)
+                    auto_save_profil(correct)
                     st.rerun()
         if st.session_state.show_feedback and st.session_state.dernier_exercice:
             st.markdown("---")
@@ -505,13 +518,52 @@ def defi_section():
                     st.session_state.show_feedback = False
                     st.rerun()
 
-# ============================================
-# MAIN
-# ============================================
+# =============== MAIN =======================
 def main():
     init_session_state()
     local_css()
     with st.sidebar:
+        # --- Section PROFIL ÉLÈVE ---
+        st.title("👤 Profil élève")
+        mode = st.radio("Sélectionner :", ("Nouveau profil", "Charger profil"), key="profil_mode")
+        liste_eleves = obtenir_tous_eleves()
+        if mode == "Nouveau profil":
+            nouveau_nom = st.text_input("Prénom")
+            if st.button("Créer le profil"):
+                if nouveau_nom and nouveau_nom not in liste_eleves:
+                    profil = profil_par_defaut()
+                    sauvegarder_utilisateur(nouveau_nom, profil)
+                    st.success(f"Profil {nouveau_nom} créé !")
+                    st.session_state["utilisateur"] = nouveau_nom
+                    st.session_state["profil"] = profil
+                elif nouveau_nom in liste_eleves:
+                    st.warning("Ce prénom existe déjà !")
+        elif mode == "Charger profil":
+            if liste_eleves:
+                selected_nom = st.selectbox("Choisir un profil", liste_eleves)
+                if st.button("Charger"):
+                    profil = charger_utilisateur(selected_nom)
+                    if profil:
+                        st.session_state["utilisateur"] = selected_nom
+                        st.session_state["profil"] = profil
+                        st.success(f"Profil {selected_nom} chargé !")
+                        st.session_state.niveau = profil.get("niveau", "CE1")
+                        st.session_state.points = profil.get("points", 0)
+                        st.session_state.badges = profil.get("badges", [])
+            else:
+                st.info("Aucun profil enregistré.")
+        if "utilisateur" in st.session_state and "profil" in st.session_state:
+            user = st.session_state["profil"]
+            nom = st.session_state["utilisateur"]
+            st.markdown(f"**Profil : {nom}**")
+            st.markdown(f"Points : {user['points']}")
+            st.markdown(f"Exercices réussis : {user['exercices_reussis']}")
+            st.markdown(f"Taux de réussite : {user['taux_reussite']}%")
+            st.markdown(f"Dernière session : {user.get('date_derniere_session','-')}")
+            st.markdown(f"Progression : {user['progression']}")
+            st.markdown("---")
+        else:
+            st.info("Aucun utilisateur sélectionné.")
         st.title("🎓 Session")
         st.markdown("---")
         st.session_state.niveau = st.selectbox("📚 Niveau :", ["CE1", "CE2", "CM1", "CM2"], key="select_niveau")
@@ -563,7 +615,6 @@ def main():
         key="main_radio"
     )
     st.markdown("---")
-    # Nettoyage session si on change de catégorie
     if categorie_selectionnee != st.session_state.active_category:
         st.session_state.exercice_courant = None
         st.session_state.show_feedback = False
