@@ -598,7 +598,7 @@ def main():
         st.markdown("**Développé par:**")
         st.markdown("**Pascal Dao**")
         st.markdown("📧 [mathcopain.contact@gmail.com](mailto:mathcopain.contact@gmail.com)")
-    st.title("🎓 MathCopain v4 - Le Leader du Calcul Mental")
+    st.title("🎓 MathCopain - Calcul Mental sans Pression")
     generer_daily_challenge()
     if st.session_state.daily_challenge['challenge']:
         challenge = st.session_state.daily_challenge['challenge']
