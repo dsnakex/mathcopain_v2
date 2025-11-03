@@ -594,10 +594,10 @@ def main():
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
-st.markdown("---")
-st.markdown("**Développé par:**")
-st.markdown("**Pascal Dao**")
-st.markdown("📧 [mathcopain.contact@gmail.com](mailto:mathcopain.contact@gmail.com)")
+        st.markdown("---")
+        st.markdown("**Développé par:**")
+        st.markdown("**Pascal Dao**")
+        st.markdown("📧 [mathcopain.contact@gmail.com](mailto:mathcopain.contact@gmail.com)")
     st.title("🎓 MathCopain v4 - Le Leader du Calcul Mental")
     generer_daily_challenge()
     if st.session_state.daily_challenge['challenge']:
