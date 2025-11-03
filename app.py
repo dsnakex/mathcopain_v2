@@ -343,6 +343,8 @@ def init_session_state():
         st.session_state.memory_first_flip = None
     if 'memory_second_flip' not in st.session_state:
         st.session_state.memory_second_flip = None
+    if 'memory_incorrect_pair' not in st.session_state:
+        st.session_state.memory_incorrect_pair = None
     
     # ✅ CORRECTION: Initialiser la catégorie active pour éviter l'erreur au démarrage
     if 'active_category' not in st.session_state:
@@ -730,23 +732,31 @@ def main():
     
     st.markdown("---")
     
-    categorie = st.radio("Choisis ce que tu veux faire :", ["📚 Exercice Rapide", "🎮 Jeux", "🚀 Défi"], horizontal=True)
+    # ✅ CORRECTION: Utiliser des noms simples et cohérents
+    categories = ["Exercice", "Jeu", "Défi"]
+    categorie_selectionnee = st.radio(
+        "Choisis ce que tu veux faire :", 
+        categories, 
+        horizontal=True, 
+        key="main_radio"
+    )
     
     st.markdown("---")
     
-    # ✅ CORRECTION: Détecter le changement de catégorie et réinitialiser l'état
-    if categorie != st.session_state.active_category:
+    # ✅ CORRECTION: Logique de nettoyage simplifiée et fiabilisée
+    if categorie_selectionnee != st.session_state.active_category:
         st.session_state.exercice_courant = None
         st.session_state.show_feedback = False
-        st.session_state.active_category = categorie
-        # Forcer un rafraîchissement pour nettoyer l'interface
+        st.session_state.jeu_type = None
+        st.session_state.jeu_memory = None
+        st.session_state.active_category = categorie_selectionnee
         st.rerun()
     
-    if "Exercice Rapide" in categorie:
+    if categorie_selectionnee == "Exercice":
         exercice_rapide_section()
-    elif "Jeu" in categorie:
+    elif categorie_selectionnee == "Jeu":
         jeu_section()
-    elif "Défi" in categorie:
+    elif categorie_selectionnee == "Défi":
         defi_section()
 
 if __name__ == "__main__":
