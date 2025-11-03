@@ -523,6 +523,13 @@ def jeu_section():
         st.write(f"Paires trouvées : **{pairs_found}/{total_pairs}**")
         st.progress(pairs_found / total_pairs)
         
+        # ✅ CORRECTION SANS TIME.SLEEP :
+        # Si une paire incorrecte a été retournée au tour précédent,
+        # on la cache maintenant, avant de traiter le nouveau clic.
+        if st.session_state.memory_incorrect_pair:
+            memory['revealed'].difference_update(st.session_state.memory_incorrect_pair)
+            st.session_state.memory_incorrect_pair = None
+        
         # ✅ KEY: Affichage SIMPLE
         cols = st.columns(4)
         for idx in range(len(memory['cards'])):
