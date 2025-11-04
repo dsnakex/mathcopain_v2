@@ -137,7 +137,115 @@ def generer_tables(niveau):
     else:
         table, mult = random.randint(1, 15), random.randint(1, 15)
     return {'question': f"{table} × {mult}", 'reponse': table * mult}
-
+def generer_explication(exercice_type, question, reponse_utilisateur, reponse_correcte):
+    """
+    Génère explication pédagogique selon type d'erreur
+    """
+    
+    if exercice_type == "addition":
+        a, b = map(int, question.replace(" ", "").split("+"))
+        
+        # Décomposition par dizaines
+        if a >= 10 or b >= 10:
+            dizaine_a = (a // 10) * 10
+            unite_a = a % 10
+            dizaine_b = (b // 10) * 10
+            unite_b = b % 10
+            
+            explication = f"""
+            💡 **Décomposons ensemble:**
+            
+            {a} = {dizaine_a} + {unite_a}
+            {b} = {dizaine_b} + {unite_b}
+            
+            **Étape 1:** Additionne les dizaines
+            → {dizaine_a} + {dizaine_b} = {dizaine_a + dizaine_b}
+            
+            **Étape 2:** Additionne les unités
+            → {unite_a} + {unite_b} = {unite_a + unite_b}
+            
+            **Étape 3:** Somme finale
+            → {dizaine_a + dizaine_b} + {unite_a + unite_b} = **{reponse_correcte}**
+            """
+        else:
+            # Méthode des bonds
+            explication = f"""
+            💡 **Méthode des bonds:**
+            
+            Commence à {a}
+            → Fais un bond de {b}
+            → Tu arrives à **{reponse_correcte}**
+            
+            Ou autrement: {a} + {b//2} = {a + b//2}, puis +{b - b//2} = **{reponse_correcte}**
+            """
+            
+        # Astuce selon difficulté
+        if b == 9:
+            astuce = f"✨ **Astuce:** Pour +9, fais +10 puis -1 → {a}+10={a+10}, puis -1={reponse_correcte}"
+        elif b == 8:
+            astuce = f"✨ **Astuce:** Pour +8, fais +10 puis -2 → {a}+10={a+10}, puis -2={reponse_correcte}"
+        else:
+            astuce = ""
+            
+        return explication + "\n" + astuce
+    
+    elif exercice_type == "soustraction":
+        a, b = map(int, question.replace(" ", "").split("-"))
+        
+        # Vérifier si retenue
+        if a % 10 < b % 10:
+            explication = f"""
+            💡 **Soustraction avec retenue:**
+            
+            {a} - {b} = ?
+            
+            **Problème:** On ne peut pas enlever {b % 10} de {a % 10}
+            
+            **Solution:**
+            1. Emprunte une dizaine
+            2. {a} devient {(a//10 - 1)*10 + 10 + a%10}
+            3. Maintenant: {10 + a%10} - {b%10} = {10 + a%10 - b%10}
+            4. Puis: {(a//10 - 1)*10} - {(b//10)*10} = {(a//10 - 1)*10 - (b//10)*10}
+            5. Total: **{reponse_correcte}**
+            """
+        else:
+            explication = f"""
+            💡 **Soustraction simple:**
+            
+            {a} - {b} = ?
+            
+            Enlève les dizaines: {(a//10)*10} - {(b//10)*10} = {(a//10 - b//10)*10}
+            Enlève les unités: {a%10} - {b%10} = {a%10 - b%10}
+            Résultat: **{reponse_correcte}**
+            """
+            
+        return explication
+    
+    elif exercice_type == "multiplication":
+        table, mult = map(int, question.replace(" ", "").replace("×", " ").split())
+        
+        # Stratégies selon multiplication
+        strategies = []
+        
+        # Stratégie 1: Doubler
+        if mult % 2 == 0:
+            demi = mult // 2
+            strategies.append(f"**Méthode 1 (Doubler):**\n{table}×{demi} = {table*demi}\nDouble: {table*demi}×2 = **{reponse_correcte}**")
+        
+        # Stratégie 2: Par 10
+        if mult <= 10:
+            strategies.append(f"**Méthode 2 (Par 10):**\n{table}×10 = {table*10}\nEnlève {table}×{10-mult}: {table*10} - {table*(10-mult)} = **{reponse_correcte}**")
+        
+        # Stratégie 3: Décomposer
+        if mult >= 6:
+            strategies.append(f"**Méthode 3 (Décomposer):**\n{table}×5 = {table*5}\n{table}×{mult-5} = {table*(mult-5)}\nSomme: {table*5} + {table*(mult-5)} = **{reponse_correcte}**")
+        
+        explication = f"💡 **Plusieurs façons de calculer {table}×{mult}:**\n\n" + "\n\n".join(strategies)
+        explication += f"\n\n✨ **Choisis la méthode qui te semble la plus facile!**"
+        
+        return explication
+    
+    return "Regarde bien le calcul et réessaye!"
 def generer_droite_numerique(niveau):
     max_val = {"CE1": 100, "CE2": 1000, "CM1": 10000}.get(niveau, 100000)
     nombre = random.randint(0, max_val)
@@ -313,20 +421,51 @@ def exercice_rapide_section():
                 st.balloons()
             else:
                 st.markdown(f'<div class="feedback-error">❌ Mauvais ! La réponse était {st.session_state.dernier_exercice["reponse"]}</div>', unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**Ton choix :** {st.session_state.feedback_reponse}")
-                st.write(f"**Réponse :** {st.session_state.dernier_exercice['reponse']}")
-            with col2:
-                if st.button("➡️ SUIVANT", use_container_width=True, key="btn_next"):
-                    if "+" in st.session_state.dernier_exercice.get('question', ''):
+                
+                # 🆕 EXPLICATION DÉTAILLÉE
+                st.markdown("---")
+                st.markdown("### 📚 Comprendre l'erreur")
+                
+                # Identifier type exercice
+                if "+" in st.session_state.dernier_exercice['question']:
+                    exercice_type = "addition"
+                elif "-" in st.session_state.dernier_exercice['question']:
+                    exercice_type = "soustraction"
+                elif "×" in st.session_state.dernier_exercice['question']:
+                    exercice_type = "multiplication"
+                else:
+                    exercice_type = "autre"
+                
+                # Générer explication
+                explication = generer_explication(
+                    exercice_type,
+                    st.session_state.dernier_exercice['question'],
+                    st.session_state.feedback_reponse,
+                    st.session_state.dernier_exercice['reponse']
+                )
+                st.markdown(explication)
+                
+                # Bouton "Réessayer même type"
+                if st.button("🔄 Réessayer un similaire", key="btn_retry"):
+                    if exercice_type == "addition":
                         st.session_state.exercice_courant = generer_addition(st.session_state.niveau)
-                    elif "-" in st.session_state.dernier_exercice.get('question', ''):
+                    elif exercice_type == "soustraction":
                         st.session_state.exercice_courant = generer_soustraction(st.session_state.niveau)
-                    else:
+                    elif exercice_type == "multiplication":
                         st.session_state.exercice_courant = generer_tables(st.session_state.niveau)
                     st.session_state.show_feedback = False
                     st.rerun()
+
+            # Bouton "SUIVANT" (commun à juste/faux)
+            if st.button("➡️ SUIVANT", use_container_width=True, key="btn_next"):
+                if "+" in st.session_state.dernier_exercice.get('question', ''):
+                    st.session_state.exercice_courant = generer_addition(st.session_state.niveau)
+                elif "-" in st.session_state.dernier_exercice.get('question', ''):
+                    st.session_state.exercice_courant = generer_soustraction(st.session_state.niveau)
+                else:
+                    st.session_state.exercice_courant = generer_tables(st.session_state.niveau)
+                st.session_state.show_feedback = False
+                st.rerun()
 
 # ================= SECTION JEUX ===================
 def jeu_section():
@@ -554,6 +693,28 @@ def main():
         if st.button("🔄 Déconnexion"):
             st.session_state.authentifie = False
             st.rerun()
+        # ← AJOUTER: Section À propos
+        st.markdown("---")
+        st.markdown("### 📞 À Propos")
+    
+        st.markdown("""
+        **MathCopain v5.1**
+    
+        Application gratuite pour apprendre 
+        le calcul mental par le jeu.
+    
+    **Développé par:** [Pascal Dao]
+    
+    **Contact:**
+    - 📧 Email: [mathcopain.contact@gmail.com]
+    - 💬 Formulaire: [https://forms.gle/3MieMDCxG47ooNbn9]
+          
+    **Version:** v5.1
+    **Mise à jour:** 4 Nov 2025
+    """)
+    
+        st.markdown("---")
+        st.caption("💚 Fait avec passion pour les enfants")
     st.title("🎓 MathCopain - Le Calcul Mental sans Pression")
     generer_daily_challenge()
     if st.session_state.daily_challenge['challenge']:
