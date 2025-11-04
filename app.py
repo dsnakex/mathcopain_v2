@@ -1,8 +1,8 @@
 import streamlit as st
 import random
 from datetime import date, datetime
-from utilisateur import charger_utilisateur, sauvegarder_utilisateur, obtenir_tous_eleves, profil_par_defaut
-
+from authentification import init_fichier_securise
+from ui_authentification import verifier_authentification
 # =============== CSS ===============
 def local_css():
     st.markdown("""
@@ -520,85 +520,41 @@ def defi_section():
 
 # =============== MAIN =======================
 def main():
+    init_fichier_securise()  # ← AJOUTER cette ligne EN PREMIER
+    verifier_authentification()  # ← AJOUTER cette ligne EN SECOND
     init_session_state()
     local_css()
     with st.sidebar:
         # --- Section PROFIL ÉLÈVE ---
+        if not st.session_state.get('authentifie', False):
+            st.warning("Authentifiés d'abord!")
+            st.stop()
+
         st.title("👤 Profil élève")
-        mode = st.radio("Sélectionner :", ("Nouveau profil", "Charger profil"), key="profil_mode")
-        liste_eleves = obtenir_tous_eleves()
-        if mode == "Nouveau profil":
-            nouveau_nom = st.text_input("Prénom")
-            if st.button("Créer le profil"):
-                if nouveau_nom and nouveau_nom not in liste_eleves:
-                    profil = profil_par_defaut()
-                    sauvegarder_utilisateur(nouveau_nom, profil)
-                    st.success(f"Profil {nouveau_nom} créé !")
-                    st.session_state["utilisateur"] = nouveau_nom
-                    st.session_state["profil"] = profil
-                elif nouveau_nom in liste_eleves:
-                    st.warning("Ce prénom existe déjà !")
-        elif mode == "Charger profil":
-            if liste_eleves:
-                selected_nom = st.selectbox("Choisir un profil", liste_eleves)
-                if st.button("Charger"):
-                    profil = charger_utilisateur(selected_nom)
-                    if profil:
-                        st.session_state["utilisateur"] = selected_nom
-                        st.session_state["profil"] = profil
-                        st.success(f"Profil {selected_nom} chargé !")
-                        st.session_state.niveau = profil.get("niveau", "CE1")
-                        st.session_state.points = profil.get("points", 0)
-                        st.session_state.badges = profil.get("badges", [])
-            else:
-                st.info("Aucun profil enregistré.")
-        if "utilisateur" in st.session_state and "profil" in st.session_state:
-            user = st.session_state["profil"]
-            nom = st.session_state["utilisateur"]
-            st.markdown(f"**Profil : {nom}**")
-            st.markdown(f"Points : {user['points']}")
-            st.markdown(f"Exercices réussis : {user['exercices_reussis']}")
-            st.markdown(f"Taux de réussite : {user['taux_reussite']}%")
-            st.markdown(f"Dernière session : {user.get('date_derniere_session','-')}")
-            st.markdown(f"Progression : {user['progression']}")
-            st.markdown("---")
-        else:
-            st.info("Aucun utilisateur sélectionné.")
-        st.title("🎓 Session")
+        st.write(f"Utilisateur: **{st.session_state.utilisateur}**")
+        
+        # ← AJOUTER: Sélecteur niveau
         st.markdown("---")
-        st.session_state.niveau = st.selectbox("📚 Niveau :", ["CE1", "CE2", "CM1", "CM2"], key="select_niveau")
+        st.subheader("📚 Choisi ton niveau:")
+        nouveau_niveau = st.selectbox(
+            "Niveau:",
+            ["CE1", "CE2", "CM1", "CM2"],
+            index=["CE1", "CE2", "CM1", "CM2"].index(st.session_state.get('niveau', 'CE1'))
+        )
+        if nouveau_niveau != st.session_state.get('niveau'):
+            st.session_state.niveau = nouveau_niveau
+            st.success(f"✅ Niveau changé à {nouveau_niveau}")
         st.markdown("---")
-        st.subheader("⭐ Points & Engagement")
+        # Stats
         col1, col2, col3 = st.columns(3)
-        col1.metric("Points", st.session_state.points)
-        col2.metric("Streak", f"🔥 {st.session_state.streak['current']}")
-        col3.metric("Max", f"🏆 {st.session_state.streak['max']}")
-        st.markdown("---")
-        st.subheader("📊 Progression")
-        progression = calculer_progression(st.session_state.stats_par_niveau)
-        for niveau, pct in progression.items():
-            st.write(f"**{niveau}** : {pct}%")
-            st.progress(pct / 100)
-        st.markdown("---")
-        st.subheader("🏅 Badges")
-        if st.session_state.badges:
-            for badge in st.session_state.badges:
-                st.markdown(f'<div class="badge">{badge}</div>', unsafe_allow_html=True)
-        else:
-            st.info("Gagne des points pour débloquer des badges !")
-        st.markdown("---")
-        st.subheader("🏆 Leaderboard")
-        afficher_leaderboard()
-        st.markdown("---")
-        if st.button("🔄 Réinitialiser Session", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+        col1.metric("Points", st.session_state.get('points', 0))
+        col2.metric("Niveau", st.session_state.get('niveau', 'CE1'))
+        col3.metric("Badges", len(st.session_state.get('badges', [])))
+
+        if st.button("🔄 Déconnexion"):
+            st.session_state.authentifie = False
             st.rerun()
-        st.markdown("---")
-        st.markdown("**Développé par:**")
-        st.markdown("**Pascal Dao**")
-        st.markdown("📧 [mathcopain.contact@gmail.com](mailto:mathcopain.contact@gmail.com)")
-    st.title("🎓 MathCopain - Calcul Mental sans Pression")
+    st.title("🎓 MathCopain - Le Calcul Mental sans Pression")
     generer_daily_challenge()
     if st.session_state.daily_challenge['challenge']:
         challenge = st.session_state.daily_challenge['challenge']
